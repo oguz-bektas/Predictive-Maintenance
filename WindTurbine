@@ -1,0 +1,64 @@
+clear all; close all; clc 
+%% This code is mainly from https://www.mathworks.com/help/predmaint/ug/wind-turbine-high-speed-bearing-prognosis.html
+% For the full dataset, go to this link
+%https://github.com/mathworks/WindTurbineHighSpeedBearingPrognosis-Data, download the entire repository as a zip file and save it in the same directory as this live script. Unzip the file using this command. 
+%The measurement time step for the full dataset is 1 day.
+
+hsbearing = fileEnsembleDatastore(...
+    fullfile('.', 'WindTurbineHighSpeedBearingPrognosis-Data-master'), ...
+    '.mat');
+hsbearing.DataVariables = ["vibration", "tach"];
+hsbearing.IndependentVariables = "Date";
+hsbearing.SelectedVariables = ["Date", "vibration", "tach"];
+hsbearing.ReadFcn = @helperReadData;
+hsbearing.WriteToMemberFcn = @helperWriteToHSBearing;
+
+hsbearing.DataVariables = ["vibration", "tach", "SpectralKurtosis"];
+colors = parula(50);
+fs = 97656; % Hz
+
+figure
+hold on
+reset(hsbearing)
+day = 1;
+tstart = 0; k=0;
+data2add = {};
+
+for i=1:length(hsbearing.Files)
+
+    k=k+1
+    data = load(hsbearing.Files(k));
+
+    
+    % Get vibration signal and measurement date
+    v = data.vibration;
+    
+    % Compute spectral kurtosis with window size = 128
+    wc = 128;
+    [SK, F] = pkurtosis(v, fs, wc);
+    data2add{k,1} = v;
+    data2add{k,2} = table(F, SK);
+    
+    % Plot the spectral kurtosis
+   plot3(F, day*ones(size(F)), SK, 'Color', colors(day, :));
+    
+    % Write spectral kurtosis values
+    %writeToLastMemberRead(v, data2add);
+    
+    % Increment the number of days
+    clear v
+    day = day + 1;
+end
+hold off
+xlabel('Frequency (Hz)')
+ylabel('Time (day)')
+zlabel('Spectral Kurtosis')
+grid on
+view(-45, 30)
+cbar = colorbar;
+ylabel(cbar, 'Fault Severity (0 - healthy, 1 - faulty)')
+
+for i=1:length(data2add)
+    Input(i,:)=table2array(data2add{i,2}(:,1))';
+    Input2(i,:)=table2array(data2add{i,2}(:,2))';
+end
